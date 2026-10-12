@@ -1,0 +1,120 @@
+/* Finder UI Stylesheet */
+
+/* Sidebar styling */
+.sidebar {
+    background-color: alpha(@theme_bg_color, 0.5);
+    border-right: 1px solid alpha(@theme_fg_color, 0.1);
+    padding: 8px;
+}
+
+.sidebar row {
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin: 2px 0;
+}
+
+.sidebar row:hover {
+    background-color: alpha(@theme_selected_bg_color, 0.1);
+}
+
+.sidebar row:selected {
+    background-color: alpha(@theme_selected_bg_color, 0.2);
+}
+
+/* List view styling */
+columnview {
+    padding: 4px;
+}
+
+columnview row {
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+columnview row:hover {
+    background-color: alpha(@theme_selected_bg_color, 0.08);
+}
+
+columnview row:selected {
+    background-color: alpha(@theme_selected_bg_color, 0.15);
+}
+
+/* Icon view styling */
+iconview {
+    padding: 8px;
+}
+
+iconview flowboxchild {
+    border-radius: 8px;
+    padding: 8px;
+    margin: 4px;
+}
+
+iconview flowboxchild:hover {
+    background-color: alpha(@theme_selected_bg_color, 0.1);
+}
+
+iconview flowboxchild:selected {
+    background-color: alpha(@theme_selected_bg_color, 0.2);
+}
+
+/* Header bar styling */
+headerbar {
+    padding: 4px;
+}
+
+headerbar button {
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin: 0 2px;
+}
+
+headerbar button:hover {
+    background-color: alpha(@theme_fg_color, 0.1);
+}
+
+/* Search entry */
+searchentry {
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin: 4px;
+}
+
+/* Path entry */
+entry.path-bar {
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+/* Stack */
+stack {
+    background-color: @theme_bg_color;
+}
+
+/* Paned separator */
+paned separator {
+    background-color: alpha(@theme_fg_color, 0.1);
+    min-width: 1px;
+}
+
+/* Scrolled window */
+scrolledwindow {
+    border: none;
+}
+
+/* Context menu popover */
+popover.menu {
+    border-radius: 8px;
+    padding: 4px;
+}
+
+popover.menu modelbutton {
+    border-radius: 6px;
+    padding: 6px 12px;
+}
+
+popover.menu modelbutton:hover {
+    background-color: alpha(@theme_selected_bg_color, 0.15);
+}

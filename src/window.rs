@@ -41,6 +41,15 @@ pub struct MainWindow {
 
 impl MainWindow {
     pub fn new(app: &gtk4::Application, initial_path: PathBuf) -> Self {
+        // Load CSS stylesheet
+        let provider = gtk4::CssProvider::new();
+        provider.load_from_path("resources/style.css");
+        gtk4::style_context_add_provider_for_display(
+            &gtk4::gdk::Display::default().unwrap(),
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+
         let window = ApplicationWindow::builder()
             .application(app)
             .title("Finder")
@@ -64,6 +73,7 @@ impl MainWindow {
             .placeholder_text("Path")
             .hexpand(true)
             .build();
+        path_entry.add_css_class("path-bar");
         header.pack_start(&path_entry);
 
         // Search entry
@@ -218,12 +228,17 @@ impl MainWindow {
         let name_factory = SignalListItemFactory::new();
         name_factory.connect_setup(|_, item| {
             let list_item = item.clone().downcast::<ListItem>().unwrap();
-            let row = GtkBox::new(Orientation::Horizontal, 8);
+            let row = GtkBox::new(Orientation::Horizontal, 10);
+            row.set_margin_top(4);
+            row.set_margin_bottom(4);
+            row.set_margin_start(8);
+            row.set_margin_end(8);
             let icon = Image::from_icon_name("text-x-generic");
-            icon.set_pixel_size(16);
+            icon.set_pixel_size(20);
             let label = Label::new(None);
             label.set_halign(gtk4::Align::Start);
             label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+            label.set_hexpand(true);
             row.append(&icon);
             row.append(&label);
             list_item.set_child(Some(&row));
@@ -900,6 +915,7 @@ impl MainWindow {
     fn wire_keyboard_shortcuts(&self) {
         let controller = EventControllerKey::new();
         let all_items_kb = self.all_items.clone();
+        let window_kb = self.window.clone();
 
         controller.connect_key_pressed(move |_, key, _mods, _state| {
             match key {
@@ -916,11 +932,46 @@ impl MainWindow {
                     glib::Propagation::Stop
                 }
                 gdk::Key::F2 => {
-                    let items = all_items_kb.lock().unwrap();
-                    if let Some(selected) = items.first() {
-                        eprintln!("Rename: {}", selected.path.display());
-                        // Inline rename would go here
-                    }
+                    let (path, old_name) = {
+                        let items = all_items_kb.lock().unwrap();
+                        match items.first() {
+                            Some(selected) => (selected.path.clone(), selected.name.clone()),
+                            None => return glib::Propagation::Stop,
+                        }
+                    };
+                    // Show inline rename dialog
+                    let dialog = gtk4::Dialog::with_buttons(
+                        Some("Rename"),
+                        Some(&window_kb),
+                        gtk4::DialogFlags::MODAL,
+                        &[("Cancel", gtk4::ResponseType::Cancel), ("Rename", gtk4::ResponseType::Accept)],
+                    );
+                    let content = dialog.content_area();
+                    let entry = gtk4::Entry::new();
+                    entry.set_text(&old_name);
+                    entry.set_activates_default(true);
+                    content.append(&entry);
+                    dialog.set_default_response(gtk4::ResponseType::Accept);
+                    dialog.connect_response(move |dialog, response| {
+                        if response == gtk4::ResponseType::Accept {
+                            let new_name = entry.text().to_string();
+                            if !new_name.is_empty() && new_name != old_name {
+                                let parent = match path.parent() {
+                                    Some(p) => p.to_path_buf(),
+                                    None => return,
+                                };
+                                let new_path = parent.join(&new_name);
+                                let old_file = gio::File::for_path(&path);
+                                let new_file = gio::File::for_path(&new_path);
+                                match old_file.move_(&new_file, gio::FileCopyFlags::NONE, None::<&gio::Cancellable>, None::<&mut dyn FnMut(i64, i64)>) {
+                                    Ok(_) => eprintln!("Renamed to: {}", new_path.display()),
+                                    Err(e) => eprintln!("Rename failed: {}", e),
+                                }
+                            }
+                        }
+                        dialog.close();
+                    });
+                    dialog.present();
                     glib::Propagation::Stop
                 }
                 gdk::Key::Return | gdk::Key::KP_Enter => {
@@ -935,6 +986,32 @@ impl MainWindow {
                             let _ = gio::AppInfo::launch_default_for_uri(&uri, None::<&gio::AppLaunchContext>);
                         }
                     }
+                    glib::Propagation::Stop
+                }
+                gdk::Key::o if _mods & gdk::ModifierType::CONTROL_MASK.bits() != 0 => {
+                    // Ctrl+O: Open With
+                    let (path, mime_type) = {
+                        let items = all_items_kb.lock().unwrap();
+                        match items.first() {
+                            Some(selected) => (selected.path.clone(), selected.mime_type.clone()),
+                            None => return glib::Propagation::Stop,
+                        }
+                    };
+                    let dialog = gtk4::AppChooserDialog::for_content_type(
+                        Some(&window_kb),
+                        gtk4::DialogFlags::MODAL,
+                        &mime_type,
+                    );
+                    dialog.connect_response(move |dialog, response| {
+                        if response == gtk4::ResponseType::Ok {
+                            if let Some(app_info) = dialog.app_info() {
+                                let file = gio::File::for_path(&path);
+                                let _ = app_info.launch(&[file], None::<&gio::AppLaunchContext>);
+                            }
+                        }
+                        dialog.close();
+                    });
+                    dialog.present();
                     glib::Propagation::Stop
                 }
                 _ => glib::Propagation::Proceed,
@@ -952,15 +1029,39 @@ impl MainWindow {
         right_click.set_button(3); // Right mouse button
 
         let all_items_ctx = self.all_items.clone();
-        let string_list_ctx = self.string_list.clone();
         let icon_view_ctx = self.icon_view.widget.clone();
+        let window_ctx = self.window.clone();
 
         right_click.connect_pressed(move |_gesture, _n_press, _x, _y| {
             let items = all_items_ctx.lock().unwrap();
             if let Some(selected) = items.first() {
-                let popover = crate::operations::context_menu::create_context_menu(&selected.path);
+                let path = selected.path.clone();
+                let name = selected.name.clone();
+                let is_dir = selected.is_dir;
+                let mime_type = selected.mime_type.clone();
+                let size = selected.size;
+                let modified = selected.modified;
+
+                let popover = crate::operations::context_menu::create_context_menu(&path);
                 popover.set_parent(&icon_view_ctx);
                 popover.popup();
+
+                // Wire Open action
+                let path_open = path.clone();
+                let is_dir_open = is_dir;
+                // Wire Trash action
+                let path_trash = path.clone();
+                // Wire Get Info action
+                let path_info = path.clone();
+                let name_info = name.clone();
+                let mime_info = mime_type.clone();
+                let size_info = size;
+                let modified_info = modified;
+                let is_dir_info = is_dir;
+
+                // Note: Full action wiring requires adding actions to the app's action group.
+                // For now, the popover is shown and actions are logged.
+                eprintln!("Context menu for: {}", path.display());
             }
         });
         self.column_view.add_controller(right_click);
@@ -1089,6 +1190,97 @@ impl MainWindow {
     pub fn move_to_trash(&self, path: &std::path::Path) -> Result<(), glib::Error> {
         let file = gio::File::for_path(path);
         file.trash(None::<&gio::Cancellable>)
+    }
+
+    /// Show file info in a dialog.
+    pub fn show_file_info_dialog(&self, path: &std::path::Path) {
+        let file = gio::File::for_path(path);
+        let info = file.query_info(
+            "standard::*,time::modified,standard::content-type",
+            gio::FileQueryInfoFlags::NONE,
+            None::<&gio::Cancellable>,
+        );
+        if let Ok(info) = info {
+            let name = info.name().to_string_lossy().to_string();
+            let size = info.size();
+            let modified = info.modification_date_time()
+                .map(|dt| dt.format("%Y-%m-%d %H:%M").unwrap_or_default())
+                .unwrap_or_else(|| "Unknown".to_string().into());
+            let content_type = info.content_type().unwrap_or_default();
+            let is_dir = info.file_type() == gio::FileType::Directory;
+
+            let dialog = gtk4::Dialog::with_buttons(
+                Some("File Info"),
+                Some(&self.window),
+                gtk4::DialogFlags::MODAL,
+                &[("Close", gtk4::ResponseType::Close)],
+            );
+            dialog.set_default_size(400, 300);
+
+            let content = dialog.content_area();
+            content.set_orientation(Orientation::Vertical);
+            content.set_spacing(12);
+            content.set_margin_top(16);
+            content.set_margin_bottom(16);
+            content.set_margin_start(16);
+            content.set_margin_end(16);
+
+            // Name
+            let name_box = GtkBox::new(Orientation::Vertical, 4);
+            let name_label = Label::new(Some("Name:"));
+            name_label.set_halign(gtk4::Align::Start);
+            let name_value = Label::new(Some(&name));
+            name_value.set_halign(gtk4::Align::Start);
+            name_value.set_selectable(true);
+            name_box.append(&name_label);
+            name_box.append(&name_value);
+            content.append(&name_box);
+
+            // Type
+            let type_box = GtkBox::new(Orientation::Vertical, 4);
+            let type_label = Label::new(Some("Type:"));
+            type_label.set_halign(gtk4::Align::Start);
+            let type_value = Label::new(Some(if is_dir { "Folder" } else { &content_type }));
+            type_value.set_halign(gtk4::Align::Start);
+            type_box.append(&type_label);
+            type_box.append(&type_value);
+            content.append(&type_box);
+
+            // Size
+            let size_box = GtkBox::new(Orientation::Vertical, 4);
+            let size_label = Label::new(Some("Size:"));
+            size_label.set_halign(gtk4::Align::Start);
+            let size_value = Label::new(Some(&if is_dir { "—".to_string() } else { format_size(size as u64) }));
+            size_value.set_halign(gtk4::Align::Start);
+            size_box.append(&size_label);
+            size_box.append(&size_value);
+            content.append(&size_box);
+
+            // Modified
+            let modified_box = GtkBox::new(Orientation::Vertical, 4);
+            let modified_label = Label::new(Some("Modified:"));
+            modified_label.set_halign(gtk4::Align::Start);
+            let modified_value = Label::new(Some(&modified));
+            modified_value.set_halign(gtk4::Align::Start);
+            modified_box.append(&modified_label);
+            modified_box.append(&modified_value);
+            content.append(&modified_box);
+
+            // Path
+            let path_box = GtkBox::new(Orientation::Vertical, 4);
+            let path_label = Label::new(Some("Path:"));
+            path_label.set_halign(gtk4::Align::Start);
+            let path_value = Label::new(Some(&path.display().to_string()));
+            path_value.set_halign(gtk4::Align::Start);
+            path_value.set_selectable(true);
+            path_value.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
+            path_box.append(&path_label);
+            path_box.append(&path_value);
+            content.append(&path_box);
+
+            dialog.connect_response(|dialog, _| dialog.close());
+            dialog.present();
+        }
     }
 }
 
