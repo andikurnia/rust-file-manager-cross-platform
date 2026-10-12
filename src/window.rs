@@ -31,7 +31,7 @@ pub struct MainWindow {
     pub column_view: ColumnView,
     pub string_list: StringList,
     pub miller_columns: Arc<Mutex<Vec<MillerColumn>>>,
-    pub miller_scroll: ScrolledWindow,
+    pub miller_scroll: GtkBox,
     pub miller_box: GtkBox,
     pub stack: Stack,
     pub icon_view: crate::views::icon_view::IconView,
@@ -112,11 +112,12 @@ impl MainWindow {
         list_scroll.set_vexpand(true);
 
         // ── Miller column view ──────────────────────────────────────
+        // No outer ScrolledWindow — each column has its own vertical scroller.
+        // The box grows horizontally as columns are added.
         let miller_box = GtkBox::new(Orientation::Horizontal, 0);
-        let miller_scroll = ScrolledWindow::new();
-        miller_scroll.set_child(Some(&miller_box));
-        miller_scroll.set_vexpand(true);
-        miller_scroll.set_hexpand(true);
+        miller_box.set_vexpand(true);
+        miller_box.set_hexpand(true);
+        let miller_scroll = miller_box.clone();
 
         // ── Icon view ───────────────────────────────────────────────
         let icon_scroll = ScrolledWindow::new();
