@@ -25,6 +25,7 @@ fn main() {
         win.window.set_default_size(settings.window_width, settings.window_height);
         match settings.view_mode {
             settings::ViewMode::List => win.set_view_mode("list"),
+            settings::ViewMode::Column => win.set_view_mode("columns"),
             settings::ViewMode::Icon => win.set_view_mode("icon"),
         }
 

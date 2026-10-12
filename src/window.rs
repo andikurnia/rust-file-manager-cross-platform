@@ -4,9 +4,11 @@ use gtk4::{
     Entry, ScrolledWindow, ColumnView, ColumnViewColumn,
     SignalListItemFactory, SingleSelection, StringList, StringObject,
     Paned, Image, Label, ListItem, Stack, SearchEntry,
+    EventControllerKey, FileChooserNative, DialogFlags,
 };
 use crate::app::NavigationState;
 use crate::settings::ViewMode;
+use crate::models::file_item::FileItem;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use gtk4::gdk;
@@ -33,7 +35,8 @@ pub struct MainWindow {
     pub stack: Stack,
     pub icon_view: crate::views::icon_view::IconView,
     pub search_entry: SearchEntry,
-    pub all_items: Arc<Mutex<Vec<crate::models::file_item::FileItem>>>,
+    pub all_items: Arc<Mutex<Vec<FileItem>>>,
+    pub file_monitor: Arc<Mutex<Option<gio::FileMonitor>>>,
 }
 
 impl MainWindow {
@@ -144,10 +147,10 @@ impl MainWindow {
         window.set_child(Some(&paned));
 
         let miller_columns = Arc::new(Mutex::new(Vec::new()));
-        let all_items = Arc::new(Mutex::new(Vec::<crate::models::file_item::FileItem>::new()));
+        let all_items = Arc::new(Mutex::new(Vec::<FileItem>::new()));
+        let file_monitor = Arc::new(Mutex::new(None));
 
-        // Wire search entry — filters files by name in real-time.
-        // Shares the same all_items Arc as the struct.
+        // Wire search entry — filters files by name in real-time
         {
             let all_items_search = all_items.clone();
             let string_list_search = string_list.clone();
@@ -190,12 +193,15 @@ impl MainWindow {
             icon_view: crate::views::icon_view::IconView { widget: icon_widget },
             search_entry: search_entry.clone(),
             all_items: all_items.clone(),
+            file_monitor: file_monitor.clone(),
         };
 
         win.setup_list_columns();
         win.wire_nav_buttons();
         win.wire_path_entry();
         win.wire_sidebar(&sidebar);
+        win.wire_keyboard_shortcuts();
+        win.wire_context_menu();
         win.add_miller_column(&initial_path);
         win.update_nav_buttons();
         win
@@ -208,6 +214,7 @@ impl MainWindow {
     // ── List view columns (Name, Date, Size) ───────────────────────
 
     pub fn setup_list_columns(&self) {
+        // Name column
         let name_factory = SignalListItemFactory::new();
         name_factory.connect_setup(|_, item| {
             let list_item = item.clone().downcast::<ListItem>().unwrap();
@@ -221,7 +228,8 @@ impl MainWindow {
             row.append(&label);
             list_item.set_child(Some(&row));
         });
-        name_factory.connect_bind(|_, item| {
+        let all_items_for_name = self.all_items.clone();
+        name_factory.connect_bind(move |_, item| {
             let list_item = item.clone().downcast::<ListItem>().unwrap();
             let row = list_item.child().and_downcast::<GtkBox>().unwrap();
             let icon = row.first_child().and_then(|w| w.downcast::<Image>().ok()).unwrap();
@@ -229,12 +237,18 @@ impl MainWindow {
             let obj = list_item.item().and_downcast::<StringObject>().unwrap();
             let name = obj.string();
             label.set_text(&name);
-            icon.set_icon_name(Some("text-x-generic"));
+            let items = all_items_for_name.lock().unwrap();
+            if let Some(file_item) = items.iter().find(|i| i.name == name) {
+                icon.set_icon_name(Some(&file_item.icon_name()));
+            } else {
+                icon.set_icon_name(Some("text-x-generic"));
+            }
         });
         let name_col = ColumnViewColumn::new(Some("Name"), Some(name_factory));
         name_col.set_expand(true);
         self.column_view.append_column(&name_col);
 
+        // Date column
         let date_factory = SignalListItemFactory::new();
         date_factory.connect_setup(|_, item| {
             let list_item = item.clone().downcast::<ListItem>().unwrap();
@@ -242,14 +256,32 @@ impl MainWindow {
             label.set_halign(gtk4::Align::Start);
             list_item.set_child(Some(&label));
         });
-        date_factory.connect_bind(|_, item| {
+        let all_items_for_date = self.all_items.clone();
+        date_factory.connect_bind(move |_, item| {
             let list_item = item.clone().downcast::<ListItem>().unwrap();
             let label = list_item.child().and_downcast::<Label>().unwrap();
-            label.set_text("—");
+            let obj = list_item.item().and_downcast::<StringObject>().unwrap();
+            let name = obj.string();
+            let items = all_items_for_date.lock().unwrap();
+            if let Some(file_item) = items.iter().find(|i| i.name == name) {
+                if file_item.modified > 0 {
+                    let dt = glib::DateTime::from_unix_local(file_item.modified).ok();
+                    if let Some(dt) = dt {
+                        label.set_text(&dt.format("%Y-%m-%d %H:%M").unwrap_or_default());
+                    } else {
+                        label.set_text("—");
+                    }
+                } else {
+                    label.set_text("—");
+                }
+            } else {
+                label.set_text("—");
+            }
         });
         let date_col = ColumnViewColumn::new(Some("Date"), Some(date_factory));
         self.column_view.append_column(&date_col);
 
+        // Size column
         let size_factory = SignalListItemFactory::new();
         size_factory.connect_setup(|_, item| {
             let list_item = item.clone().downcast::<ListItem>().unwrap();
@@ -257,10 +289,22 @@ impl MainWindow {
             label.set_halign(gtk4::Align::End);
             list_item.set_child(Some(&label));
         });
-        size_factory.connect_bind(|_, item| {
+        let all_items_for_size = self.all_items.clone();
+        size_factory.connect_bind(move |_, item| {
             let list_item = item.clone().downcast::<ListItem>().unwrap();
             let label = list_item.child().and_downcast::<Label>().unwrap();
-            label.set_text("—");
+            let obj = list_item.item().and_downcast::<StringObject>().unwrap();
+            let name = obj.string();
+            let items = all_items_for_size.lock().unwrap();
+            if let Some(file_item) = items.iter().find(|i| i.name == name) {
+                if file_item.is_dir {
+                    label.set_text("—");
+                } else {
+                    label.set_text(&format_size(file_item.size));
+                }
+            } else {
+                label.set_text("—");
+            }
         });
         let size_col = ColumnViewColumn::new(Some("Size"), Some(size_factory));
         self.column_view.append_column(&size_col);
@@ -472,6 +516,11 @@ impl MainWindow {
                         miller_box.remove(&col.view);
                     }
                 }
+                // Re-add the column for the previous path
+                let prev_clone = prev.clone();
+                // We need to add the Miller column back
+                // This is handled by the caller via add_miller_column
+                let _ = prev_clone;
             }
         });
 
@@ -546,6 +595,50 @@ impl MainWindow {
         });
     }
 
+    // ── Keyboard shortcuts ─────────────────────────────────────────
+
+    fn wire_keyboard_shortcuts(&self) {
+        let controller = EventControllerKey::new();
+        let window = self.window.clone();
+        let column_view = self.column_view.clone();
+        let string_list = self.string_list.clone();
+
+        controller.connect_key_pressed(move |_, key, _mods, _state| {
+            match key {
+                gdk::Key::Delete | gdk::Key::KP_Delete => {
+                    // Move selected items to trash
+                    eprintln!("Delete pressed");
+                    glib::Propagation::Stop
+                }
+                gdk::Key::F2 => {
+                    // Rename selected item
+                    eprintln!("F2 pressed");
+                    glib::Propagation::Stop
+                }
+                gdk::Key::Return | gdk::Key::KP_Enter => {
+                    // Open selected item
+                    eprintln!("Enter pressed");
+                    glib::Propagation::Stop
+                }
+                _ => glib::Propagation::Proceed,
+            }
+        });
+
+        self.window.add_controller(controller);
+    }
+
+    // ── Context menu ───────────────────────────────────────────────
+
+    fn wire_context_menu(&self) {
+        // Right-click on the column view shows a context menu
+        let right_click = gtk4::GestureClick::new();
+        right_click.set_button(3); // Right mouse button
+        right_click.connect_pressed(move |_gesture, _n_press, x, y| {
+            eprintln!("Right click at ({}, {})", x, y);
+        });
+        self.column_view.add_controller(right_click);
+    }
+
     // ── Public API ─────────────────────────────────────────────────
 
     pub async fn load_directory(&self, path: &std::path::Path) {
@@ -562,12 +655,8 @@ impl MainWindow {
                     }
                 });
 
-                // Store all items for search filtering
                 *self.all_items.lock().unwrap() = items.clone();
-                // Also update the search filter's items
-                // (the search closure has its own Arc, so we need to update it via all_items)
 
-                // Populate the list view
                 let n = self.string_list.n_items();
                 for i in (0..n).rev() {
                     self.string_list.remove(i);
@@ -576,14 +665,39 @@ impl MainWindow {
                     self.string_list.append(&item.name);
                 }
 
-                // Populate icon view
                 self.icon_view.populate(&items);
+
+                // Set up file monitoring
+                self.setup_file_monitor(path);
 
                 eprintln!("Loaded {} items from {}", items.len(), path.display());
             }
             Err(e) => {
                 eprintln!("Error listing {}: {}", path.display(), e);
             }
+        }
+    }
+
+    fn setup_file_monitor(&self, path: &std::path::Path) {
+        let file = gio::File::for_path(path);
+        if let Ok(monitor) = file.monitor_directory(gio::FileMonitorFlags::NONE, None::<&gio::Cancellable>) {
+            let path_clone = path.to_path_buf();
+            monitor.connect_changed(move |_monitor, file, _other_file, event| {
+                match event {
+                    gio::FileMonitorEvent::Created => {
+                        eprintln!("File created: {:?}", file.path());
+                    }
+                    gio::FileMonitorEvent::Deleted => {
+                        eprintln!("File deleted: {:?}", file.path());
+                    }
+                    gio::FileMonitorEvent::Changed => {
+                        eprintln!("File changed: {:?}", file.path());
+                    }
+                    _ => {}
+                }
+                let _ = &path_clone;
+            });
+            *self.file_monitor.lock().unwrap() = Some(monitor);
         }
     }
 
@@ -597,5 +711,48 @@ impl MainWindow {
     pub fn generate_thumbnail(&self, path: &std::path::Path, _size: i32) -> Option<gtk4::gdk::Texture> {
         let file = gio::File::for_path(path);
         gtk4::gdk::Texture::from_file(&file).ok()
+    }
+}
+
+/// Format a file size in bytes to a human-readable string.
+fn format_size(size: u64) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+    if size == 0 {
+        return "0 B".to_string();
+    }
+    let exp = (size as f64).log(1024.0).min(UNITS.len() as f64 - 1.0) as usize;
+    let value = size as f64 / 1024f64.powi(exp as i32);
+    if exp == 0 {
+        format!("{} {}", size, UNITS[0])
+    } else {
+        format!("{:.1} {}", value, UNITS[exp])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_size_bytes() {
+        assert_eq!(format_size(0), "0 B");
+        assert_eq!(format_size(512), "512 B");
+    }
+
+    #[test]
+    fn test_format_size_kilobytes() {
+        assert_eq!(format_size(1024), "1.0 KB");
+        assert_eq!(format_size(1536), "1.5 KB");
+    }
+
+    #[test]
+    fn test_format_size_megabytes() {
+        assert_eq!(format_size(1024 * 1024), "1.0 MB");
+        assert_eq!(format_size(5 * 1024 * 1024), "5.0 MB");
+    }
+
+    #[test]
+    fn test_format_size_gigabytes() {
+        assert_eq!(format_size(1024 * 1024 * 1024), "1.0 GB");
     }
 }

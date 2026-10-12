@@ -11,6 +11,7 @@ pub struct AppSettings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ViewMode {
     List,
+    Column,
     Icon,
 }
 
@@ -85,7 +86,9 @@ mod tests {
     #[test]
     fn test_view_mode_equality() {
         assert_eq!(ViewMode::List, ViewMode::List);
+        assert_eq!(ViewMode::Column, ViewMode::Column);
         assert_eq!(ViewMode::Icon, ViewMode::Icon);
         assert_ne!(ViewMode::List, ViewMode::Icon);
+        assert_ne!(ViewMode::List, ViewMode::Column);
     }
 }

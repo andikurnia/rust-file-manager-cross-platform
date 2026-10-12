@@ -1,2 +1,5 @@
 /target
 *.deb
+*.rpm
+*.tar.gz
+*.tar.xz
