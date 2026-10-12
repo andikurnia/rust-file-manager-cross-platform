@@ -426,7 +426,7 @@ impl MainWindow {
 
         let list_for_click = list.clone();
         let sel_for_click = sel.clone();
-        click.connect_pressed(move |_gesture, _n_press, _x, _y| {
+        click.connect_released(move |_gesture, _n_press, _x, _y| {
             // Get the selected item from the list model
             let n = list_for_click.n_items();
             if n == 0 {
