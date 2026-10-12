@@ -11,14 +11,14 @@ impl IconView {
         let widget = FlowBox::new();
         widget.set_selection_mode(gtk4::SelectionMode::Multiple);
         widget.set_homogeneous(true);
-        widget.set_max_children_per_line(12);
+        widget.set_max_children_per_line(16);
         widget.set_min_children_per_line(2);
-        widget.set_column_spacing(8);
-        widget.set_row_spacing(8);
-        widget.set_margin_top(12);
-        widget.set_margin_bottom(12);
-        widget.set_margin_start(12);
-        widget.set_margin_end(12);
+        widget.set_column_spacing(2);
+        widget.set_row_spacing(2);
+        widget.set_margin_top(4);
+        widget.set_margin_bottom(4);
+        widget.set_margin_start(4);
+        widget.set_margin_end(4);
         widget.add_css_class("iconview");
 
         Self { widget }
@@ -39,11 +39,9 @@ impl IconView {
         let container = FlowBoxChild::new();
         container.add_css_class("icon-item");
 
-        let vbox = Box::new(Orientation::Vertical, 6);
+        let vbox = Box::new(Orientation::Vertical, 2);
         vbox.set_halign(gtk4::Align::Center);
         vbox.set_valign(gtk4::Align::Start);
-        vbox.set_margin_top(4);
-        vbox.set_margin_bottom(4);
 
         // Icon or thumbnail
         let image = if item.is_dir {

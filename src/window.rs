@@ -19,6 +19,7 @@ struct MillerColumn {
     pub list: StringList,
     pub selection: SingleSelection,
     pub view: ColumnView,
+    pub scroll: ScrolledWindow,
 }
 
 pub struct MainWindow {
@@ -333,7 +334,7 @@ impl MainWindow {
             if let Some(idx) = cols.iter().position(|c| c.path == path) {
                 while cols.len() > idx + 1 {
                     if let Some(col) = cols.pop() {
-                        self.miller_box.remove(&col.view);
+                        self.miller_box.remove(&col.scroll);
                     }
                 }
                 return;
@@ -374,6 +375,13 @@ impl MainWindow {
         let col = ColumnViewColumn::new(Some("Name"), Some(factory));
         col.set_expand(true);
         view.append_column(&col);
+
+        // Wrap in ScrolledWindow for independent vertical scrolling
+        let col_scroll = ScrolledWindow::new();
+        col_scroll.set_child(Some(&view));
+        col_scroll.set_vexpand(true);
+        col_scroll.set_size_request(200, -1);
+        col_scroll.set_hexpand(false);
 
         let path_owned = path.to_path_buf();
         glib::spawn_future_local(glib::clone!(
@@ -420,7 +428,7 @@ impl MainWindow {
                         if let Some(idx) = cols.iter().position(|c| c.path == path_for_nav) {
                             while cols.len() > idx + 1 {
                                 if let Some(col) = cols.pop() {
-                                    miller_box.remove(&col.view);
+                                    miller_box.remove(&col.scroll);
                                 }
                             }
                         }
@@ -460,6 +468,13 @@ impl MainWindow {
                     col.set_expand(true);
                     new_view.append_column(&col);
 
+                    // Wrap in ScrolledWindow for independent vertical scrolling
+                    let new_scroll = ScrolledWindow::new();
+                    new_scroll.set_child(Some(&new_view));
+                    new_scroll.set_vexpand(true);
+                    new_scroll.set_size_request(200, -1);
+                    new_scroll.set_hexpand(false);
+
                     let child_path_clone = child_path.clone();
                     glib::spawn_future_local(glib::clone!(
                         #[weak]
@@ -490,12 +505,13 @@ impl MainWindow {
                         }
                     ));
 
-                    miller_box.append(&new_view);
+                    miller_box.append(&new_scroll);
                     miller_cols.lock().unwrap().push(MillerColumn {
                         path: child_path.clone(),
                         list,
                         selection: new_sel,
                         view: new_view,
+                        scroll: new_scroll,
                     });
 
                     nav.lock().unwrap().navigate_to(child_path.clone());
@@ -504,12 +520,13 @@ impl MainWindow {
             }
         });
 
-        self.miller_box.append(&view);
+        self.miller_box.append(&col_scroll);
         self.miller_columns.lock().unwrap().push(MillerColumn {
             path: path.to_path_buf(),
             list,
             selection: sel,
             view,
+            scroll: col_scroll,
         });
     }
 
@@ -531,7 +548,7 @@ impl MainWindow {
                 {
                     let mut cols = miller_columns.lock().unwrap();
                     while let Some(col) = cols.pop() {
-                        miller_box.remove(&col.view);
+                        miller_box.remove(&col.scroll);
                     }
                 }
                 // Re-add the Miller column for the previous path
@@ -609,12 +626,18 @@ impl MainWindow {
                     }
                 ));
 
-                miller_box_clone.append(&view);
+                let col_scroll = ScrolledWindow::new();
+                col_scroll.set_child(Some(&view));
+                col_scroll.set_vexpand(true);
+                col_scroll.set_size_request(200, -1);
+                col_scroll.set_hexpand(false);
+                miller_box_clone.append(&col_scroll);
                 miller_cols_clone.lock().unwrap().push(MillerColumn {
                     path: prev_clone.clone(),
                     list,
                     selection: sel,
                     view,
+                    scroll: col_scroll,
                 });
 
                 // Also update the list view and icon view
@@ -665,7 +688,7 @@ impl MainWindow {
                 {
                     let mut cols = miller_columns.lock().unwrap();
                     while let Some(col) = cols.pop() {
-                        miller_box.remove(&col.view);
+                        miller_box.remove(&col.scroll);
                     }
                 }
                 // Re-add the Miller column for the next path
@@ -741,12 +764,18 @@ impl MainWindow {
                     }
                 ));
 
-                miller_box_clone.append(&view);
+                let col_scroll = ScrolledWindow::new();
+                col_scroll.set_child(Some(&view));
+                col_scroll.set_vexpand(true);
+                col_scroll.set_size_request(200, -1);
+                col_scroll.set_hexpand(false);
+                miller_box_clone.append(&col_scroll);
                 miller_cols_clone.lock().unwrap().push(MillerColumn {
                     path: next_clone.clone(),
                     list,
                     selection: sel,
                     view,
+                    scroll: col_scroll,
                 });
 
                 // Also update the list view and icon view
@@ -796,7 +825,7 @@ impl MainWindow {
                 {
                     let mut cols = miller_columns.lock().unwrap();
                     while let Some(col) = cols.pop() {
-                        miller_box.remove(&col.view);
+                        miller_box.remove(&col.scroll);
                     }
                 }
             }
@@ -831,7 +860,7 @@ impl MainWindow {
                     {
                         let mut cols = miller_columns.lock().unwrap();
                         while let Some(col) = cols.pop() {
-                            miller_box.remove(&col.view);
+                            miller_box.remove(&col.scroll);
                         }
                     }
                     let all_items_clone = all_items_sb.clone();
@@ -871,7 +900,7 @@ impl MainWindow {
                     {
                         let mut cols = miller_columns.lock().unwrap();
                         while let Some(col) = cols.pop() {
-                            miller_box.remove(&col.view);
+                            miller_box.remove(&col.scroll);
                         }
                     }
                     let p_clone = p.clone();
