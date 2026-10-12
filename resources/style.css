@@ -1,120 +1,215 @@
 /* Finder UI Stylesheet */
 
-/* Sidebar styling */
+/* ── Header Bar ─────────────────────────────────────────────── */
+headerbar {
+    padding: 4px 8px;
+    background-color: alpha(@theme_bg_color, 0.8);
+    border-bottom: 1px solid alpha(@theme_fg_color, 0.08);
+}
+
+/* Navigation group (back/forward) */
+.nav-group {
+    background-color: alpha(@theme_fg_color, 0.06);
+    border-radius: 8px;
+    padding: 2px;
+}
+
+.nav-group .nav-button {
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin: 0;
+    background: transparent;
+    border: none;
+}
+
+.nav-group .nav-button:hover {
+    background-color: alpha(@theme_fg_color, 0.1);
+}
+
+.nav-group .nav-button:disabled {
+    opacity: 0.4;
+}
+
+/* App title */
+.app-title {
+    padding: 4px 16px;
+}
+
+.app-title-label {
+    font-weight: 600;
+    font-size: 1.05em;
+    color: @theme_fg_color;
+}
+
+/* Search bar */
+.search-bar {
+    border-radius: 8px;
+    padding: 4px 12px;
+    background-color: alpha(@theme_fg_color, 0.06);
+    border: 1px solid alpha(@theme_fg_color, 0.1);
+    min-width: 180px;
+}
+
+.search-bar:focus {
+    background-color: alpha(@theme_fg_color, 0.03);
+    border-color: alpha(@theme_selected_bg_color, 0.5);
+}
+
+/* View switcher (segmented control) */
+.view-switcher {
+    background-color: alpha(@theme_fg_color, 0.06);
+    border-radius: 8px;
+    padding: 2px;
+}
+
+.view-switcher .view-btn {
+    border-radius: 6px;
+    padding: 6px 12px;
+    margin: 0;
+    background: transparent;
+    border: none;
+}
+
+.view-switcher .view-btn:hover {
+    background-color: alpha(@theme_fg_color, 0.1);
+}
+
+.view-switcher .view-btn:checked,
+.view-switcher .view-btn.active {
+    background-color: alpha(@theme_selected_bg_color, 0.2);
+    color: @theme_selected_fg_color;
+}
+
+/* ── Path Bar ───────────────────────────────────────────────── */
+.path-bar {
+    background-color: alpha(@theme_bg_color, 0.5);
+    border-bottom: 1px solid alpha(@theme_fg_color, 0.06);
+    padding: 6px 12px;
+}
+
+.path-bar .path-entry {
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-family: monospace;
+    font-size: 0.85em;
+    background-color: alpha(@theme_fg_color, 0.04);
+    border: 1px solid alpha(@theme_fg_color, 0.08);
+}
+
+.path-bar .path-entry:focus {
+    background-color: alpha(@theme_fg_color, 0.02);
+    border-color: alpha(@theme_selected_bg_color, 0.4);
+}
+
+/* ── Sidebar ────────────────────────────────────────────────── */
 .sidebar {
     background-color: alpha(@theme_bg_color, 0.5);
-    border-right: 1px solid alpha(@theme_fg_color, 0.1);
+    border-right: 1px solid alpha(@theme_fg_color, 0.08);
     padding: 8px;
 }
 
-.sidebar row {
-    border-radius: 6px;
+.sidebar-section-header {
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: alpha(@theme_fg_color, 0.5);
+    padding: 8px 12px 4px 12px;
+}
+
+.sidebar-row {
+    border-radius: 8px;
     padding: 6px 8px;
-    margin: 2px 0;
+    margin: 1px 4px;
 }
 
-.sidebar row:hover {
-    background-color: alpha(@theme_selected_bg_color, 0.1);
+.sidebar-row:hover {
+    background-color: alpha(@theme_selected_bg_color, 0.08);
 }
 
-.sidebar row:selected {
-    background-color: alpha(@theme_selected_bg_color, 0.2);
+.sidebar-placeholder {
+    font-size: 0.85em;
+    color: alpha(@theme_fg_color, 0.4);
+    padding: 4px 12px;
 }
 
-/* List view styling */
+/* ── List View ──────────────────────────────────────────────── */
 columnview {
     padding: 4px;
 }
 
 columnview row {
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: 5px 8px;
+    border-radius: 6px;
 }
 
 columnview row:hover {
-    background-color: alpha(@theme_selected_bg_color, 0.08);
+    background-color: alpha(@theme_selected_bg_color, 0.06);
 }
 
 columnview row:selected {
-    background-color: alpha(@theme_selected_bg_color, 0.15);
+    background-color: alpha(@theme_selected_bg_color, 0.12);
 }
 
-/* Icon view styling */
+/* ── Icon View ──────────────────────────────────────────────── */
 iconview {
-    padding: 8px;
+    padding: 4px;
 }
 
 iconview flowboxchild {
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 2px;
     margin: 0;
 }
 
 iconview flowboxchild:hover {
-    background-color: alpha(@theme_selected_bg_color, 0.1);
+    background-color: alpha(@theme_selected_bg_color, 0.08);
 }
 
 iconview flowboxchild:selected {
-    background-color: alpha(@theme_selected_bg_color, 0.2);
+    background-color: alpha(@theme_selected_bg_color, 0.15);
 }
 
-/* Header bar styling */
-headerbar {
-    padding: 4px;
-}
-
-headerbar button {
-    border-radius: 6px;
-    padding: 6px 10px;
-    margin: 0 2px;
-}
-
-headerbar button:hover {
-    background-color: alpha(@theme_fg_color, 0.1);
-}
-
-/* Search entry */
-searchentry {
-    border-radius: 6px;
-    padding: 4px 8px;
-    margin: 4px;
-}
-
-/* Path entry */
-entry.path-bar {
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-family: monospace;
-    font-size: 0.9em;
-}
-
-/* Stack */
+/* ── Stack ──────────────────────────────────────────────────── */
 stack {
     background-color: @theme_bg_color;
 }
 
-/* Paned separator */
+/* ── Paned ──────────────────────────────────────────────────── */
 paned separator {
-    background-color: alpha(@theme_fg_color, 0.1);
+    background-color: alpha(@theme_fg_color, 0.08);
     min-width: 1px;
 }
 
-/* Scrolled window */
+/* ── Scrolled Window ────────────────────────────────────────── */
 scrolledwindow {
     border: none;
 }
 
-/* Context menu popover */
+/* ── Context Menu ───────────────────────────────────────────── */
 popover.menu {
-    border-radius: 8px;
-    padding: 4px;
+    border-radius: 10px;
+    padding: 6px;
+    background-color: alpha(@theme_bg_color, 0.95);
+    border: 1px solid alpha(@theme_fg_color, 0.1);
+    box-shadow: 0 2px 8px alpha(black, 0.15);
 }
 
 popover.menu modelbutton {
     border-radius: 6px;
     padding: 6px 12px;
+    margin: 1px 0;
 }
 
 popover.menu modelbutton:hover {
-    background-color: alpha(@theme_selected_bg_color, 0.15);
+    background-color: alpha(@theme_selected_bg_color, 0.12);
+}
+
+/* ── Dialogs ────────────────────────────────────────────────── */
+dialog {
+    border-radius: 12px;
+}
+
+dialog .dialog-content {
+    padding: 16px;
 }

@@ -62,40 +62,81 @@ impl MainWindow {
         let header = HeaderBar::new();
         window.set_titlebar(Some(&header));
 
+        // Left: Navigation controls (back/forward grouped)
+        let nav_box = GtkBox::new(Orientation::Horizontal, 0);
+        nav_box.add_css_class("nav-group");
+
         let back_button = Button::from_icon_name("go-previous-symbolic");
         back_button.set_tooltip_text(Some("Back"));
-        header.pack_start(&back_button);
+        back_button.add_css_class("nav-button");
+        nav_box.append(&back_button);
 
         let forward_button = Button::from_icon_name("go-next-symbolic");
         forward_button.set_tooltip_text(Some("Forward"));
-        header.pack_start(&forward_button);
+        forward_button.add_css_class("nav-button");
+        nav_box.append(&forward_button);
+
+        header.pack_start(&nav_box);
+
+        // Center: App title with icon
+        let title_box = GtkBox::new(Orientation::Horizontal, 6);
+        title_box.set_halign(gtk4::Align::Center);
+        title_box.add_css_class("app-title");
+
+        let title_icon = Image::from_icon_name("folder-remote");
+        title_icon.set_pixel_size(18);
+        let title_label = Label::new(Some("Finder"));
+        title_label.add_css_class("app-title-label");
+        title_box.append(&title_icon);
+        title_box.append(&title_label);
+
+        header.pack_start(&title_box);
+
+        // Right: Search + view switcher
+        let search_entry = SearchEntry::builder()
+            .placeholder_text("Search")
+            .width_request(200)
+            .build();
+        search_entry.add_css_class("search-bar");
+        header.pack_end(&search_entry);
+
+        // View switcher as segmented control
+        let view_switcher = GtkBox::new(Orientation::Horizontal, 0);
+        view_switcher.add_css_class("view-switcher");
+
+        let list_btn = Button::from_icon_name("view-list-symbolic");
+        list_btn.set_tooltip_text(Some("List View"));
+        list_btn.add_css_class("view-btn");
+        list_btn.add_css_class("view-btn-first");
+        view_switcher.append(&list_btn);
+
+        let columns_btn = Button::from_icon_name("view-column-symbolic");
+        columns_btn.set_tooltip_text(Some("Column View"));
+        columns_btn.add_css_class("view-btn");
+        view_switcher.append(&columns_btn);
+
+        let icons_btn = Button::from_icon_name("view-grid-symbolic");
+        icons_btn.set_tooltip_text(Some("Icon View"));
+        icons_btn.add_css_class("view-btn");
+        icons_btn.add_css_class("view-btn-last");
+        view_switcher.append(&icons_btn);
+
+        header.pack_end(&view_switcher);
+
+        // Path bar below header (breadcrumb style)
+        let path_bar_box = GtkBox::new(Orientation::Horizontal, 4);
+        path_bar_box.add_css_class("path-bar");
+        path_bar_box.set_margin_start(12);
+        path_bar_box.set_margin_end(12);
+        path_bar_box.set_margin_top(6);
+        path_bar_box.set_margin_bottom(6);
 
         let path_entry = Entry::builder()
             .placeholder_text("Path")
             .hexpand(true)
             .build();
-        path_entry.add_css_class("path-bar");
-        header.pack_start(&path_entry);
-
-        // Search entry
-        let search_entry = SearchEntry::builder()
-            .placeholder_text("Search")
-            .hexpand(true)
-            .build();
-        header.pack_start(&search_entry);
-
-        // View switcher buttons (list / columns / icons)
-        let list_btn = Button::from_icon_name("view-list-symbolic");
-        list_btn.set_tooltip_text(Some("List View"));
-        header.pack_end(&list_btn);
-
-        let columns_btn = Button::from_icon_name("view-column-symbolic");
-        columns_btn.set_tooltip_text(Some("Column View"));
-        header.pack_end(&columns_btn);
-
-        let icons_btn = Button::from_icon_name("view-grid-symbolic");
-        icons_btn.set_tooltip_text(Some("Icon View"));
-        header.pack_end(&icons_btn);
+        path_entry.add_css_class("path-entry");
+        path_bar_box.append(&path_entry);
 
         // ── Navigation state ────────────────────────────────────────
         let nav = Arc::new(Mutex::new(NavigationState::new(initial_path.clone())));
@@ -156,7 +197,12 @@ impl MainWindow {
         paned.set_end_child(Some(&stack));
         paned.set_position(200);
 
-        window.set_child(Some(&paned));
+        // Window layout: path bar on top, content below
+        let vbox = GtkBox::new(Orientation::Vertical, 0);
+        vbox.append(&path_bar_box);
+        vbox.append(&paned);
+
+        window.set_child(Some(&vbox));
 
         let miller_columns = Arc::new(Mutex::new(Vec::new()));
         let all_items = Arc::new(Mutex::new(Vec::<FileItem>::new()));
