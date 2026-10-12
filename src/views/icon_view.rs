@@ -11,14 +11,14 @@ impl IconView {
         let widget = FlowBox::new();
         widget.set_selection_mode(gtk4::SelectionMode::Multiple);
         widget.set_homogeneous(true);
-        widget.set_max_children_per_line(16);
+        widget.set_max_children_per_line(24);
         widget.set_min_children_per_line(2);
-        widget.set_column_spacing(2);
-        widget.set_row_spacing(2);
-        widget.set_margin_top(4);
-        widget.set_margin_bottom(4);
-        widget.set_margin_start(4);
-        widget.set_margin_end(4);
+        widget.set_column_spacing(0);
+        widget.set_row_spacing(0);
+        widget.set_margin_top(2);
+        widget.set_margin_bottom(2);
+        widget.set_margin_start(2);
+        widget.set_margin_end(2);
         widget.add_css_class("iconview");
 
         Self { widget }
