@@ -506,6 +506,9 @@ impl MainWindow {
         let miller_columns = self.miller_columns.clone();
         let miller_box = self.miller_box.clone();
         let back_button = self.back_button.clone();
+        let all_items_bk = self.all_items.clone();
+        let string_list_bk = self.string_list.clone();
+        let icon_view_bk = self.icon_view.widget.clone();
 
         back_button.connect_clicked(move |_| {
             if let Some(prev) = nav.lock().unwrap().go_back() {
@@ -516,11 +519,119 @@ impl MainWindow {
                         miller_box.remove(&col.view);
                     }
                 }
-                // Re-add the column for the previous path
+                // Re-add the Miller column for the previous path
                 let prev_clone = prev.clone();
-                // We need to add the Miller column back
-                // This is handled by the caller via add_miller_column
-                let _ = prev_clone;
+                let miller_cols_clone = miller_columns.clone();
+                let miller_box_clone = miller_box.clone();
+                let all_items_clone = all_items_bk.clone();
+                let string_list_clone = string_list_bk.clone();
+                let icon_view_clone = icon_view_bk.clone();
+                let path_entry_clone = path_entry.clone();
+
+                // Add the column back
+                let list = StringList::new(&[]);
+                let sel = SingleSelection::new(Some(list.clone()));
+                let view = ColumnView::new(Some(sel.clone()));
+                view.set_vexpand(true);
+                view.set_size_request(200, -1);
+
+                let factory = SignalListItemFactory::new();
+                factory.connect_setup(|_, item| {
+                    let list_item = item.clone().downcast::<ListItem>().unwrap();
+                    let row = GtkBox::new(Orientation::Horizontal, 6);
+                    let icon = Image::from_icon_name("text-x-generic");
+                    icon.set_pixel_size(14);
+                    let label = Label::new(None);
+                    label.set_halign(gtk4::Align::Start);
+                    label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+                    row.append(&icon);
+                    row.append(&label);
+                    list_item.set_child(Some(&row));
+                });
+                factory.connect_bind(|_, item| {
+                    let list_item = item.clone().downcast::<ListItem>().unwrap();
+                    let row = list_item.child().and_downcast::<GtkBox>().unwrap();
+                    let icon = row.first_child().and_then(|w| w.downcast::<Image>().ok()).unwrap();
+                    let label = row.last_child().and_then(|w| w.downcast::<Label>().ok()).unwrap();
+                    let obj = list_item.item().and_downcast::<StringObject>().unwrap();
+                    let name = obj.string().to_string();
+                    label.set_text(&name);
+                    let item_path = PathBuf::from(&name);
+                    let is_dir = item_path.is_dir();
+                    icon.set_icon_name(Some(if is_dir { "folder" } else { "text-x-generic" }));
+                });
+                let col = ColumnViewColumn::new(Some("Name"), Some(factory));
+                col.set_expand(true);
+                view.append_column(&col);
+
+                let path_owned = prev_clone.clone();
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    list,
+                    async move {
+                        match crate::models::file_item::list_directory(&path_owned).await {
+                            Ok(items) => {
+                                let mut items = items;
+                                items.sort_by(|a, b| {
+                                    match (a.is_dir, b.is_dir) {
+                                        (true, false) => std::cmp::Ordering::Less,
+                                        (false, true) => std::cmp::Ordering::Greater,
+                                        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                                    }
+                                });
+                                let n = list.n_items();
+                                for i in (0..n).rev() {
+                                    list.remove(i);
+                                }
+                                for item in &items {
+                                    list.append(&item.name);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Error listing {}: {}", path_owned.display(), e);
+                            }
+                        }
+                    }
+                ));
+
+                miller_box_clone.append(&view);
+                miller_cols_clone.lock().unwrap().push(MillerColumn {
+                    path: prev_clone.clone(),
+                    list,
+                    selection: sel,
+                    view,
+                });
+
+                // Also update the list view and icon view
+                let path_clone2 = prev_clone.clone();
+                glib::spawn_future_local(async move {
+                    match crate::models::file_item::list_directory(&path_clone2).await {
+                        Ok(items) => {
+                            let mut items = items;
+                            items.sort_by(|a, b| {
+                                match (a.is_dir, b.is_dir) {
+                                    (true, false) => std::cmp::Ordering::Less,
+                                    (false, true) => std::cmp::Ordering::Greater,
+                                    _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                                }
+                            });
+                            *all_items_clone.lock().unwrap() = items.clone();
+                            let n = string_list_clone.n_items();
+                            for i in (0..n).rev() {
+                                string_list_clone.remove(i);
+                            }
+                            for item in &items {
+                                string_list_clone.append(&item.name);
+                            }
+                            // Update icon view
+                            let icon_view = crate::views::icon_view::IconView { widget: icon_view_clone };
+                            icon_view.populate(&items);
+                        }
+                        Err(e) => {
+                            eprintln!("Error listing {}: {}", path_clone2.display(), e);
+                        }
+                    }
+                });
             }
         });
 
@@ -529,6 +640,9 @@ impl MainWindow {
         let miller_columns = self.miller_columns.clone();
         let miller_box = self.miller_box.clone();
         let forward_button = self.forward_button.clone();
+        let all_items_fw = self.all_items.clone();
+        let string_list_fw = self.string_list.clone();
+        let icon_view_fw = self.icon_view.widget.clone();
 
         forward_button.connect_clicked(move |_| {
             if let Some(next) = nav.lock().unwrap().go_forward() {
@@ -539,6 +653,116 @@ impl MainWindow {
                         miller_box.remove(&col.view);
                     }
                 }
+                // Re-add the Miller column for the next path
+                let next_clone = next.clone();
+                let miller_cols_clone = miller_columns.clone();
+                let miller_box_clone = miller_box.clone();
+                let all_items_clone = all_items_fw.clone();
+                let string_list_clone = string_list_fw.clone();
+                let icon_view_clone = icon_view_fw.clone();
+
+                let list = StringList::new(&[]);
+                let sel = SingleSelection::new(Some(list.clone()));
+                let view = ColumnView::new(Some(sel.clone()));
+                view.set_vexpand(true);
+                view.set_size_request(200, -1);
+
+                let factory = SignalListItemFactory::new();
+                factory.connect_setup(|_, item| {
+                    let list_item = item.clone().downcast::<ListItem>().unwrap();
+                    let row = GtkBox::new(Orientation::Horizontal, 6);
+                    let icon = Image::from_icon_name("text-x-generic");
+                    icon.set_pixel_size(14);
+                    let label = Label::new(None);
+                    label.set_halign(gtk4::Align::Start);
+                    label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+                    row.append(&icon);
+                    row.append(&label);
+                    list_item.set_child(Some(&row));
+                });
+                factory.connect_bind(|_, item| {
+                    let list_item = item.clone().downcast::<ListItem>().unwrap();
+                    let row = list_item.child().and_downcast::<GtkBox>().unwrap();
+                    let icon = row.first_child().and_then(|w| w.downcast::<Image>().ok()).unwrap();
+                    let label = row.last_child().and_then(|w| w.downcast::<Label>().ok()).unwrap();
+                    let obj = list_item.item().and_downcast::<StringObject>().unwrap();
+                    let name = obj.string().to_string();
+                    label.set_text(&name);
+                    let item_path = PathBuf::from(&name);
+                    let is_dir = item_path.is_dir();
+                    icon.set_icon_name(Some(if is_dir { "folder" } else { "text-x-generic" }));
+                });
+                let col = ColumnViewColumn::new(Some("Name"), Some(factory));
+                col.set_expand(true);
+                view.append_column(&col);
+
+                let path_owned = next_clone.clone();
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    list,
+                    async move {
+                        match crate::models::file_item::list_directory(&path_owned).await {
+                            Ok(items) => {
+                                let mut items = items;
+                                items.sort_by(|a, b| {
+                                    match (a.is_dir, b.is_dir) {
+                                        (true, false) => std::cmp::Ordering::Less,
+                                        (false, true) => std::cmp::Ordering::Greater,
+                                        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                                    }
+                                });
+                                let n = list.n_items();
+                                for i in (0..n).rev() {
+                                    list.remove(i);
+                                }
+                                for item in &items {
+                                    list.append(&item.name);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Error listing {}: {}", path_owned.display(), e);
+                            }
+                        }
+                    }
+                ));
+
+                miller_box_clone.append(&view);
+                miller_cols_clone.lock().unwrap().push(MillerColumn {
+                    path: next_clone.clone(),
+                    list,
+                    selection: sel,
+                    view,
+                });
+
+                // Also update the list view and icon view
+                let path_clone2 = next_clone.clone();
+                glib::spawn_future_local(async move {
+                    match crate::models::file_item::list_directory(&path_clone2).await {
+                        Ok(items) => {
+                            let mut items = items;
+                            items.sort_by(|a, b| {
+                                match (a.is_dir, b.is_dir) {
+                                    (true, false) => std::cmp::Ordering::Less,
+                                    (false, true) => std::cmp::Ordering::Greater,
+                                    _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                                }
+                            });
+                            *all_items_clone.lock().unwrap() = items.clone();
+                            let n = string_list_clone.n_items();
+                            for i in (0..n).rev() {
+                                string_list_clone.remove(i);
+                            }
+                            for item in &items {
+                                string_list_clone.append(&item.name);
+                            }
+                            let icon_view = crate::views::icon_view::IconView { widget: icon_view_clone };
+                            icon_view.populate(&items);
+                        }
+                        Err(e) => {
+                            eprintln!("Error listing {}: {}", path_clone2.display(), e);
+                        }
+                    }
+                });
             }
         });
     }
@@ -569,6 +793,9 @@ impl MainWindow {
         let path_entry = self.path_entry.clone();
         let miller_columns = self.miller_columns.clone();
         let miller_box = self.miller_box.clone();
+        let all_items_sb = self.all_items.clone();
+        let string_list_sb = self.string_list.clone();
+        let icon_view_sb = self.icon_view.widget.clone();
 
         sidebar.list.connect_row_activated(move |_list, row| {
             let index = row.index();
@@ -581,7 +808,49 @@ impl MainWindow {
                 _ => None,
             };
             if let Some(p) = path {
-                if p.is_dir() {
+                let is_trash = p.to_string_lossy().starts_with("trash:");
+                if is_trash {
+                    let trash_path = PathBuf::from("trash:///");
+                    nav.lock().unwrap().navigate_to(trash_path.clone());
+                    path_entry.set_text("Trash");
+                    {
+                        let mut cols = miller_columns.lock().unwrap();
+                        while let Some(col) = cols.pop() {
+                            miller_box.remove(&col.view);
+                        }
+                    }
+                    let all_items_clone = all_items_sb.clone();
+                    let string_list_clone = string_list_sb.clone();
+                    let icon_view_clone = icon_view_sb.clone();
+                    glib::spawn_future_local(async move {
+                        match crate::models::file_item::list_directory(&trash_path).await {
+                            Ok(items) => {
+                                let mut items = items;
+                                items.sort_by(|a, b| {
+                                    match (a.is_dir, b.is_dir) {
+                                        (true, false) => std::cmp::Ordering::Less,
+                                        (false, true) => std::cmp::Ordering::Greater,
+                                        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                                    }
+                                });
+                                *all_items_clone.lock().unwrap() = items.clone();
+                                let n = string_list_clone.n_items();
+                                for i in (0..n).rev() {
+                                    string_list_clone.remove(i);
+                                }
+                                for item in &items {
+                                    string_list_clone.append(&item.name);
+                                }
+                                let icon_view = crate::views::icon_view::IconView { widget: icon_view_clone };
+                                icon_view.populate(&items);
+                                eprintln!("Loaded {} items from trash", items.len());
+                            }
+                            Err(e) => {
+                                eprintln!("Error listing trash: {}", e);
+                            }
+                        }
+                    });
+                } else if p.is_dir() {
                     nav.lock().unwrap().navigate_to(p.clone());
                     path_entry.set_text(&p.to_string_lossy());
                     {
@@ -590,6 +859,37 @@ impl MainWindow {
                             miller_box.remove(&col.view);
                         }
                     }
+                    let p_clone = p.clone();
+                    let all_items_clone = all_items_sb.clone();
+                    let string_list_clone = string_list_sb.clone();
+                    let icon_view_clone = icon_view_sb.clone();
+                    glib::spawn_future_local(async move {
+                        match crate::models::file_item::list_directory(&p_clone).await {
+                            Ok(items) => {
+                                let mut items = items;
+                                items.sort_by(|a, b| {
+                                    match (a.is_dir, b.is_dir) {
+                                        (true, false) => std::cmp::Ordering::Less,
+                                        (false, true) => std::cmp::Ordering::Greater,
+                                        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                                    }
+                                });
+                                *all_items_clone.lock().unwrap() = items.clone();
+                                let n = string_list_clone.n_items();
+                                for i in (0..n).rev() {
+                                    string_list_clone.remove(i);
+                                }
+                                for item in &items {
+                                    string_list_clone.append(&item.name);
+                                }
+                                let icon_view = crate::views::icon_view::IconView { widget: icon_view_clone };
+                                icon_view.populate(&items);
+                            }
+                            Err(e) => {
+                                eprintln!("Error listing {}: {}", p_clone.display(), e);
+                            }
+                        }
+                    });
                 }
             }
         });
@@ -599,25 +899,42 @@ impl MainWindow {
 
     fn wire_keyboard_shortcuts(&self) {
         let controller = EventControllerKey::new();
-        let window = self.window.clone();
-        let column_view = self.column_view.clone();
-        let string_list = self.string_list.clone();
+        let all_items_kb = self.all_items.clone();
 
         controller.connect_key_pressed(move |_, key, _mods, _state| {
             match key {
                 gdk::Key::Delete | gdk::Key::KP_Delete => {
-                    // Move selected items to trash
-                    eprintln!("Delete pressed");
+                    let items = all_items_kb.lock().unwrap();
+                    if let Some(selected) = items.first() {
+                        let path = selected.path.clone();
+                        let file = gio::File::for_path(&path);
+                        match file.trash(None::<&gio::Cancellable>) {
+                            Ok(_) => eprintln!("Moved to trash: {}", path.display()),
+                            Err(e) => eprintln!("Failed to trash {}: {}", path.display(), e),
+                        }
+                    }
                     glib::Propagation::Stop
                 }
                 gdk::Key::F2 => {
-                    // Rename selected item
-                    eprintln!("F2 pressed");
+                    let items = all_items_kb.lock().unwrap();
+                    if let Some(selected) = items.first() {
+                        eprintln!("Rename: {}", selected.path.display());
+                        // Inline rename would go here
+                    }
                     glib::Propagation::Stop
                 }
                 gdk::Key::Return | gdk::Key::KP_Enter => {
-                    // Open selected item
-                    eprintln!("Enter pressed");
+                    let items = all_items_kb.lock().unwrap();
+                    if let Some(selected) = items.first() {
+                        let path = selected.path.clone();
+                        if path.is_dir() {
+                            eprintln!("Navigate into: {}", path.display());
+                        } else {
+                            let file = gio::File::for_path(&path);
+                            let uri = file.uri();
+                            let _ = gio::AppInfo::launch_default_for_uri(&uri, None::<&gio::AppLaunchContext>);
+                        }
+                    }
                     glib::Propagation::Stop
                 }
                 _ => glib::Propagation::Proceed,
@@ -630,11 +947,21 @@ impl MainWindow {
     // ── Context menu ───────────────────────────────────────────────
 
     fn wire_context_menu(&self) {
-        // Right-click on the column view shows a context menu
+        // Right-click on the column view shows a context menu with actions
         let right_click = gtk4::GestureClick::new();
         right_click.set_button(3); // Right mouse button
-        right_click.connect_pressed(move |_gesture, _n_press, x, y| {
-            eprintln!("Right click at ({}, {})", x, y);
+
+        let all_items_ctx = self.all_items.clone();
+        let string_list_ctx = self.string_list.clone();
+        let icon_view_ctx = self.icon_view.widget.clone();
+
+        right_click.connect_pressed(move |_gesture, _n_press, _x, _y| {
+            let items = all_items_ctx.lock().unwrap();
+            if let Some(selected) = items.first() {
+                let popover = crate::operations::context_menu::create_context_menu(&selected.path);
+                popover.set_parent(&icon_view_ctx);
+                popover.popup();
+            }
         });
         self.column_view.add_controller(right_click);
     }
@@ -711,6 +1038,57 @@ impl MainWindow {
     pub fn generate_thumbnail(&self, path: &std::path::Path, _size: i32) -> Option<gtk4::gdk::Texture> {
         let file = gio::File::for_path(path);
         gtk4::gdk::Texture::from_file(&file).ok()
+    }
+
+    /// Rename a file from `old_path` to `new_name` in the same directory.
+    pub fn rename_file(&self, old_path: &std::path::Path, new_name: &str) -> Result<(), glib::Error> {
+        let parent = old_path.parent().ok_or_else(|| {
+            glib::Error::new(glib::FileError::Noent, "No parent directory")
+        })?;
+        let new_path = parent.join(new_name);
+        let old_file = gio::File::for_path(old_path);
+        let new_file = gio::File::for_path(&new_path);
+        old_file.move_(
+            &new_file,
+            gio::FileCopyFlags::NONE,
+            None::<&gio::Cancellable>,
+            None::<&mut dyn FnMut(i64, i64)>,
+        )?;
+        Ok(())
+    }
+
+    /// Open a file with the default application.
+    pub fn open_file(&self, path: &std::path::Path) {
+        let file = gio::File::for_path(path);
+        let uri = file.uri();
+        eprintln!("Opening: {}", uri);
+        // Use gio to launch the default application
+        let _ = gio::AppInfo::launch_default_for_uri(&uri, None::<&gio::AppLaunchContext>);
+    }
+
+    /// Show file info in a dialog.
+    pub fn show_file_info(&self, path: &std::path::Path) {
+        let file = gio::File::for_path(path);
+        let info = file.query_info(
+            "standard::*,time::modified",
+            gio::FileQueryInfoFlags::NONE,
+            None::<&gio::Cancellable>,
+        );
+        if let Ok(info) = info {
+            let name = info.name().to_string_lossy().to_string();
+            let size = info.size();
+            let modified = info.modification_date_time()
+                .map(|dt| dt.format("%Y-%m-%d %H:%M").unwrap_or_default())
+                .unwrap_or_else(|| "Unknown".to_string().into());
+            let content_type = info.content_type().unwrap_or_default();
+            eprintln!("File: {}, Size: {}, Modified: {}, Type: {}", name, size, modified, content_type);
+        }
+    }
+
+    /// Move a file to trash.
+    pub fn move_to_trash(&self, path: &std::path::Path) -> Result<(), glib::Error> {
+        let file = gio::File::for_path(path);
+        file.trash(None::<&gio::Cancellable>)
     }
 }
 

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use gio::prelude::FileExt;
 use gio::prelude::FileEnumeratorExt;
 use gio::prelude::ListModelExt;
+use glib::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct FileItem {
@@ -26,6 +27,18 @@ impl FileItem {
         Self { name, path, is_dir, size, modified, mime_type }
     }
 
+    /// Get the icon for this file item using gio::ContentType for proper theming.
+    pub fn icon(&self) -> gio::Icon {
+        if self.is_dir {
+            return gio::ThemedIcon::new("folder").upcast();
+        }
+        // Use gio::ContentType to get the proper icon for the MIME type
+        let (content_type, _uncertain) = gio::content_type_guess(Some(self.name.as_str()), None);
+        let icon = gio::content_type_get_icon(&content_type);
+        return icon;
+    }
+
+    /// Get the icon name string for this file item.
     pub fn icon_name(&self) -> String {
         if self.is_dir {
             return "folder".to_string();
@@ -39,6 +52,11 @@ impl FileItem {
             _ => "application-x-executable",
         }
         .to_string()
+    }
+
+    /// Get the display name for this file item.
+    pub fn display_name(&self) -> String {
+        self.name.clone()
     }
 }
 
@@ -134,5 +152,32 @@ mod tests {
             mime_type: "application/octet-stream".to_string(),
         };
         assert_eq!(item.icon_name(), "application-x-executable");
+    }
+
+    #[test]
+    fn test_file_item_icon_returns_gio_icon() {
+        let item = FileItem {
+            name: "test.txt".to_string(),
+            path: PathBuf::from("/tmp/test.txt"),
+            is_dir: false,
+            size: 100,
+            modified: 0,
+            mime_type: "text/plain".to_string(),
+        };
+        let _icon = item.icon();
+        // Just verify it doesn't panic
+    }
+
+    #[test]
+    fn test_file_item_display_name() {
+        let item = FileItem {
+            name: "myfile.txt".to_string(),
+            path: PathBuf::from("/tmp/myfile.txt"),
+            is_dir: false,
+            size: 100,
+            modified: 0,
+            mime_type: "text/plain".to_string(),
+        };
+        assert_eq!(item.display_name(), "myfile.txt");
     }
 }
