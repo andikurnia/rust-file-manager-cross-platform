@@ -29,7 +29,6 @@ fn main() {
             settings::ViewMode::Icon => win.set_view_mode("icon"),
         }
 
-        win.setup_list_columns();
         win.update_nav_buttons();
         win.window.present();
 
