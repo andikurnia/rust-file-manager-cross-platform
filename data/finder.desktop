@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Finder
+Comment=A macOS Finder clone for Linux
+Exec=finder
+Icon=finder
+Type=Application
+Categories=Utility;FileManager;
+Terminal=false
