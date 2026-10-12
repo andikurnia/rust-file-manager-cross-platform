@@ -418,11 +418,27 @@ impl MainWindow {
         let miller_box = self.miller_box.clone();
         let nav = self.nav.clone();
         let path_entry = self.path_entry.clone();
-        sel.connect_notify_local(Some("selected"), move |sel, _| {
-            if let Some(selected_obj) = sel.selected_item() {
+
+        // Use GestureClick instead of selection notify — handles every click,
+        // including re-clicking an already-selected item
+        let click = gtk4::GestureClick::new();
+        click.set_button(1); // Left mouse button
+
+        let list_for_click = list.clone();
+        let sel_for_click = sel.clone();
+        click.connect_pressed(move |_gesture, _n_press, _x, _y| {
+            // Get the selected item from the list model
+            let n = list_for_click.n_items();
+            if n == 0 {
+                return;
+            }
+            // Find which item was clicked by checking the selection
+            let sel_item = sel_for_click.selected_item();
+            if let Some(selected_obj) = sel_item {
                 let name = selected_obj.downcast::<StringObject>().unwrap().string();
                 let child_path = path_for_nav.join(&name);
                 if child_path.is_dir() {
+                    // Truncate columns after this one
                     {
                         let mut cols = miller_cols.lock().unwrap();
                         if let Some(idx) = cols.iter().position(|c| c.path == path_for_nav) {
@@ -433,6 +449,7 @@ impl MainWindow {
                             }
                         }
                     }
+
                     let list = StringList::new(&[]);
                     let new_sel = SingleSelection::new(Some(list.clone()));
                     let new_view = ColumnView::new(Some(new_sel.clone()));
@@ -468,7 +485,6 @@ impl MainWindow {
                     col.set_expand(true);
                     new_view.append_column(&col);
 
-                    // Wrap in ScrolledWindow for independent vertical scrolling
                     let new_scroll = ScrolledWindow::new();
                     new_scroll.set_child(Some(&new_view));
                     new_scroll.set_vexpand(true);
@@ -519,6 +535,7 @@ impl MainWindow {
                 }
             }
         });
+        view.add_controller(click);
 
         self.miller_box.append(&col_scroll);
         self.miller_columns.lock().unwrap().push(MillerColumn {

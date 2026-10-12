@@ -9,8 +9,8 @@ pub struct IconView {
 impl IconView {
     pub fn new() -> Self {
         let widget = FlowBox::new();
-        widget.set_selection_mode(gtk4::SelectionMode::Multiple);
-        widget.set_homogeneous(true);
+        widget.set_selection_mode(gtk4::SelectionMode::Single);
+        widget.set_homogeneous(false);
         widget.set_max_children_per_line(24);
         widget.set_min_children_per_line(2);
         widget.set_column_spacing(0);
